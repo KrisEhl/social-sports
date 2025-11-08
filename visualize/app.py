@@ -1,0 +1,148 @@
+# pip install geopandas shapely folium branca pandas pyogrio
+import json
+import pandas as pd
+import geopandas as gpd
+import folium
+import branca.colormap as cm
+import os
+
+import pandas as pd
+from shapely.geometry import box
+import numpy as np
+import branca.colormap as cm
+
+from utils_regrid import regrid_sum_2km
+
+
+def add_soccer_fields_to_map(m):
+    soccer_fields = pd.read_csv("berlin_soccer_fields.csv")
+    # m = folium.Map(location=(52.4813076, 13.4381063), zoom_start=12)
+    for _, row in soccer_fields.iterrows():
+        name = row.get("name") or "Unnamed field"
+        leisure = row.get("leisure") or "unknown type"
+        popup_html = f"<b>{leisure}</b><br>{name}"
+        marker = folium.Marker(
+            location=[row["lat"], row["lon"]],
+            popup=folium.Popup(popup_html, max_width=250),
+            tooltip=leisure,
+        )
+        marker.add_to(m)
+
+
+# ---------- CONFIG ----------
+GEOJSON_IN = "GHS_POP_E2030_GLOBE_R2023A_54009_100_V1_0_R3_C20.geojson"  # input GeoJSON from your polygonize step
+GEOJSON_OUT = "filtered.geojson"  # optional filtered output (for inspection)
+HTML_OUT = "choropleth.html"
+VALUE_FIELD = "value"  # attribute holding your metric
+BBOX = (12.9, 52.2, 13.9, 52.7)  # (min_lon, min_lat, max_lon, max_lat)
+
+# ---------- LOAD + FILTER ----------
+min_lon, min_lat, max_lon, max_lat = BBOX
+bbox_poly = box(min_lon, min_lat, max_lon, max_lat)
+
+print("[INFO] Loading features within bbox using GeoPandas…")
+# If pyogrio is available (modern GeoPandas), this streams only bbox features:
+if os.path.exists(GEOJSON_OUT):
+    gdf = gpd.read_file(GEOJSON_OUT, bbox=BBOX)
+else:
+    try:
+        gdf = gpd.read_file(GEOJSON_IN, bbox=BBOX)
+        print(f"[INFO] Loaded {len(gdf)} features (bbox read).")
+    except TypeError:
+        # Fallback: load all then filter (works everywhere but uses more RAM)
+        gdf = gpd.read_file(GEOJSON_IN)
+        print(f"[INFO] Loaded {len(gdf)} features (full read).")
+        gdf = gdf[gdf.intersects(bbox_poly)]
+        print(f"[INFO] After bbox filter: {len(gdf)} features.")
+
+    if gdf.empty:
+        raise RuntimeError("No features found in the requested bounding box.")
+
+    # Ensure WGS84
+    if gdf.crs is None or gdf.crs.to_epsg() != 4326:
+        print("[INFO] Reprojecting to EPSG:4326 (WGS84)…")
+        gdf = gdf.to_crs(4326)
+
+    # Optional: write filtered subset for debugging/inspection
+    gdf.to_file(GEOJSON_OUT, driver="GeoJSON")
+    print(f"[INFO] Wrote filtered GeoJSON → {GEOJSON_OUT}")
+
+
+# Keep only rows with a numeric VALUE_FIELD
+if VALUE_FIELD not in gdf.columns:
+    # Some exports place it inside properties; if you loaded via json, it’s already columns.
+    # If it's nested, you'd promote it here. For standard GDAL export, it should already be a column.
+    raise RuntimeError(f"'{VALUE_FIELD}' column not found in GeoDataFrame.")
+
+gdf = gdf[pd.to_numeric(gdf[VALUE_FIELD], errors="coerce").notna()].copy()
+gdf[VALUE_FIELD] = gdf[VALUE_FIELD].astype(float)
+gdf = gdf[gdf[VALUE_FIELD].notna() & (gdf[VALUE_FIELD] != 0)]
+
+gdf = regrid_sum_2km(gdf, tile_size_m=2_000, area_weighted=True)
+
+if "fid" not in gdf.columns:
+    gdf = gdf.reset_index(drop=True)
+    gdf["fid"] = gdf.index.astype(int)
+
+print("regrid to 2km grid:", gdf.head())
+
+
+if gdf.empty:
+    raise RuntimeError(f"No features with numeric '{VALUE_FIELD}' after filtering.")
+
+df_vals = gdf[["fid", VALUE_FIELD]].copy()
+
+# Compute map center from bounds
+minx, miny, maxx, maxy = gdf.total_bounds
+center = [(miny + maxy) / 2.0, (minx + maxx) / 2.0]
+
+# Prepare a GeoJSON dictionary (so Folium sees the properties incl. fid/value)
+gj = json.loads(gdf.to_json())
+
+# ---------- BUILD FOLIUM MAP ----------
+# Compute color scale
+vmin, vmax = float(df_vals[VALUE_FIELD].min()), float(df_vals[VALUE_FIELD].max())
+
+# Create your own Viridis colormap with branca
+
+cmap = cm.linear.viridis.scale(vmin, vmax)
+cmap.caption = VALUE_FIELD
+
+# Create the base map
+m = folium.Map(location=center, zoom_start=11, tiles="cartodbpositron")
+
+# Use Choropleth WITHOUT the `fill_color` arg (or use a ColorBrewer palette instead)
+folium.Choropleth(
+    geo_data=gj,
+    name="Choropleth",
+    data=df_vals,
+    columns=["fid", VALUE_FIELD],
+    key_on="feature.properties.fid",
+    fill_color="YlGnBu",  # ✅ valid ColorBrewer palette, OR remove this and style manually
+    fill_opacity=0.7,
+    line_opacity=0.1,
+    nan_fill_opacity=0.0,
+    legend_name=VALUE_FIELD,
+).add_to(m)
+
+# Add colorbar manually
+cmap.add_to(m)
+
+# Tooltip layer
+folium.GeoJson(
+    gj,
+    name="Values",
+    tooltip=folium.features.GeoJsonTooltip(
+        fields=[VALUE_FIELD],
+        aliases=[f"{VALUE_FIELD}: "],
+        sticky=True,
+    ),
+    style_function=lambda _: {"weight": 0},
+).add_to(m)
+
+folium.LayerControl(collapsed=False).add_to(m)
+
+
+add_soccer_fields_to_map(m)
+m.save(HTML_OUT)
+print(f"[DONE] Saved {HTML_OUT}")
