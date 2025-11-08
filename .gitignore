@@ -1,0 +1,5 @@
+# data
+*.csv
+*.tif
+*.html
+.DS_Store
