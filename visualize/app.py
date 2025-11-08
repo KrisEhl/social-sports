@@ -3,15 +3,12 @@ import json
 import pandas as pd
 import geopandas as gpd
 import folium
-import branca.colormap as cm
 import os
-
-import pandas as pd
 from shapely.geometry import box
 import numpy as np
 import branca.colormap as cm
 
-from utils_regrid import regrid_sum_2km
+from utils_regrid import regrid_sum_2km, add_soccer_counts_to_grid
 
 
 def add_soccer_fields_to_map(m):
@@ -78,7 +75,8 @@ gdf = gdf[pd.to_numeric(gdf[VALUE_FIELD], errors="coerce").notna()].copy()
 gdf[VALUE_FIELD] = gdf[VALUE_FIELD].astype(float)
 gdf = gdf[gdf[VALUE_FIELD].notna() & (gdf[VALUE_FIELD] != 0)]
 
-gdf = regrid_sum_2km(gdf, tile_size_m=2_000, area_weighted=True)
+gdf = regrid_sum_2km(gdf, tile_size_m=5_000, area_weighted=True)
+gdf = add_soccer_counts_to_grid(gdf, "berlin_soccer_fields.csv")
 
 if "fid" not in gdf.columns:
     gdf = gdf.reset_index(drop=True)
@@ -90,57 +88,170 @@ print("regrid to 2km grid:", gdf.head())
 if gdf.empty:
     raise RuntimeError(f"No features with numeric '{VALUE_FIELD}' after filtering.")
 
-df_vals = gdf[["fid", VALUE_FIELD]].copy()
+# df_vals = gdf[["fid", VALUE_FIELD]].copy()
 
-# Compute map center from bounds
+# # Compute map center from bounds
 minx, miny, maxx, maxy = gdf.total_bounds
 center = [(miny + maxy) / 2.0, (minx + maxx) / 2.0]
 
-# Prepare a GeoJSON dictionary (so Folium sees the properties incl. fid/value)
-gj = json.loads(gdf.to_json())
+# # Prepare a GeoJSON dictionary (so Folium sees the properties incl. fid/value)
+# gj = json.loads(gdf.to_json())
 
-# ---------- BUILD FOLIUM MAP ----------
-# Compute color scale
-vmin, vmax = float(df_vals[VALUE_FIELD].min()), float(df_vals[VALUE_FIELD].max())
+# # ---------- BUILD FOLIUM MAP ----------
+# # Compute color scale
+# vmin, vmax = float(df_vals[VALUE_FIELD].min()), float(df_vals[VALUE_FIELD].max())
 
-# Create your own Viridis colormap with branca
+# # Create your own Viridis colormap with branca
 
-cmap = cm.linear.viridis.scale(vmin, vmax)
-cmap.caption = VALUE_FIELD
+# cmap = cm.linear.viridis.scale(vmin, vmax)
+# cmap.caption = VALUE_FIELD
 
 # Create the base map
+m = folium.Map(location=center, zoom_start=18, tiles="cartodbpositron")
+
+# # Use Choropleth WITHOUT the `fill_color` arg (or use a ColorBrewer palette instead)
+# folium.Choropleth(
+#     geo_data=gj,
+#     name="Choropleth",
+#     data=df_vals,
+#     columns=["fid", VALUE_FIELD],
+#     key_on="feature.properties.fid",
+#     fill_color="YlGnBu",  # ✅ valid ColorBrewer palette, OR remove this and style manually
+#     fill_opacity=0.7,
+#     line_opacity=0.1,
+#     nan_fill_opacity=0.0,
+#     legend_name=VALUE_FIELD,
+# ).add_to(m)
+
+# # Add colorbar manually
+# cmap.add_to(m)
+# Tooltip layer
+# folium.GeoJson(
+#     gj,
+#     name="ratio",
+#     tooltip=folium.features.GeoJsonTooltip(
+#         fields=["ratio"],
+#         aliases=[f"{'ratio'}: "],
+#         sticky=True,
+#     ),
+#     style_function=lambda _: {"weight": 0},
+# ).add_to(m)
+
+
+def add_ratio_fields_to_map(m, gdf):
+    gj = json.loads(gdf.to_crs(4326).to_json())
+    folium.Choropleth(
+        geo_data=gj,
+        name="Soccer fields (count)",
+        data=gdf[["tile_id", "ratio"]],
+        columns=["tile_id", "ratio"],
+        key_on="feature.properties.tile_id",
+        fill_color="OrRd",
+        fill_opacity=0.6,
+        line_opacity=0.1,
+        legend_name="Soccer fields/Population",
+    ).add_to(m)
+
+    # Tooltip layer
+    folium.GeoJson(
+        gj,
+        name="ratio",
+        tooltip=folium.features.GeoJsonTooltip(
+            fields=["ratio"],
+            aliases=[f"{'ratio'}: "],
+            sticky=True,
+        ),
+        style_function=lambda _: {"weight": 0},
+    ).add_to(m)
+
+    folium.LayerControl(collapsed=False).add_to(m)
+
+
+out = gdf.copy()
+# Ignore very scarcely populated areas
+gdf["ratio"] = np.where(
+    (gdf["value"] > 1000) & (gdf["soccer_count"] > 0),
+    gdf["soccer_count"] / gdf["value"],
+    np.nan,
+)
+gdf["ratio"] /= gdf["ratio"].max()
+
+# Reproject to WGS84 for Folium
+gdf_wgs = gdf.to_crs(4326)
+
+# Map center
+minx, miny, maxx, maxy = gdf_wgs.total_bounds
+center = [(miny + maxy) / 2.0, (minx + maxx) / 2.0]
+
+# GeoJSON for folium
+gj = json.loads(gdf_wgs.to_json())
+
+# Compute vmin/vmax based on quantiles (to reduce outlier distortion)
+valid = gdf_wgs["ratio"].replace([np.inf, -np.inf], np.nan).dropna()
+if valid.empty:
+    vmin, vmax = 0.0, 1.0
+else:
+    vmin, vmax = float(valid.quantile(0.02)), float(valid.quantile(0.98))
+    if vmin == vmax:
+        vmin, vmax = 0.0, float(valid.max() or 1.0)
+
+# Create color scale
+# cmap = cm.linear.magma.scale(vmin, vmax)
+cmap = cm.StepColormap(
+    colors=[
+        "#a50026",
+        "#d73027",
+        "#f46d43",
+        "#fdae61",
+        "#fee08b",
+        "#d9ef8b",
+        "#a6d96a",
+        "#66bd63",
+        "#1a9850",
+    ],
+    vmin=vmin,
+    vmax=vmax,
+)
+cmap.caption = "Soccer fields / Value (ratio)"
+
+# cmap.colors = list(reversed(cmap.colors))
+
+# Initialize map
 m = folium.Map(location=center, zoom_start=11, tiles="cartodbpositron")
 
-# Use Choropleth WITHOUT the `fill_color` arg (or use a ColorBrewer palette instead)
-folium.Choropleth(
-    geo_data=gj,
-    name="Choropleth",
-    data=df_vals,
-    columns=["fid", VALUE_FIELD],
-    key_on="feature.properties.fid",
-    fill_color="YlGnBu",  # ✅ valid ColorBrewer palette, OR remove this and style manually
-    fill_opacity=0.7,
-    line_opacity=0.1,
-    nan_fill_opacity=0.0,
-    legend_name=VALUE_FIELD,
-).add_to(m)
 
-# Add colorbar manually
-cmap.add_to(m)
+# --- style tiles manually using the colormap ---
+def style_fn(feature):
+    r = feature["properties"].get("ratio")
+    if r is None or np.isnan(r):
+        return {"fillOpacity": 0.0, "weight": 0.1, "color": "grey"}
+    return {
+        "fillColor": cmap(r),
+        "color": "black",
+        "weight": 0.1,
+        "fillOpacity": 0.7,
+    }
 
-# Tooltip layer
+
+# Add layer
 folium.GeoJson(
     gj,
-    name="Values",
+    name="Soccer-to-Population Ratio (normalized)",
+    style_function=style_fn,
     tooltip=folium.features.GeoJsonTooltip(
-        fields=[VALUE_FIELD],
-        aliases=[f"{VALUE_FIELD}: "],
+        fields=["ratio", "value", "soccer_count"],
+        aliases=["ratio:", "population:", "soccer fields:"],
         sticky=True,
+        localize=True,
     ),
-    style_function=lambda _: {"weight": 0},
 ).add_to(m)
 
+# Add legend
+cmap.add_to(m)
 folium.LayerControl(collapsed=False).add_to(m)
+m.save("choropleth_ratio.html")
+
+print(f"[DONE] Saved choropleth_ratio.html with vmin={vmin:.2f}, vmax={vmax:.2f}")
 
 
 add_soccer_fields_to_map(m)
