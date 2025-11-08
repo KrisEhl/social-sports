@@ -3,3 +3,4 @@
 *.tif
 *.html
 .DS_Store
+*.geojson

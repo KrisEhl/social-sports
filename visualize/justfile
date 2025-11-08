@@ -1,3 +1,8 @@
 run:
     uv run python main.py
     open index.html
+
+convert-tif-to-geojson:
+    uv run python convert-tif-to-geojson.py \
+        GHS_POP_E2030_GLOBE_R2023A_54009_100_V1_0_R3_C19.tif \
+        GHS_POP_E2030_GLOBE_R2023A_54009_100_V1_0_R3_C19.geojson
