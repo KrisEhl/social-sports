@@ -19,8 +19,6 @@ LEISURE_TO_COLOR = {
 
 def add_soccer_fields_to_map(m):
     soccer_fields = pd.read_csv("berlin_soccer_fields.csv")
-    # m = folium.Map(location=(52.4813076, 13.4381063), zoom_start=12)
-    # breakpoint()
     for _, row in soccer_fields.iterrows():
         name = row.get("name") or "Unnamed field"
         leisure = row.get("leisure") or "unknown type"
@@ -231,3 +229,41 @@ folium.LayerControl(collapsed=False).add_to(m)
 add_soccer_fields_to_map(m)
 m.save(HTML_OUT)
 print(f"[DONE] Saved {HTML_OUT} with vmin={vmin:.2f}, vmax={vmax:.2f}")
+
+ROOFS_PATH = "/mnt/data/berlin_rooftops.geojson"  # or your local path
+with open(ROOFS_PATH, "r", encoding="utf-8") as f:
+    roofs_gj = json.load(f)
+
+# --- create a pane so polygons render above tiles, below markers ---
+folium.map.Pane("rooftops", z_index=420).add_to(m)  # m = your existing Folium map
+
+# Pick up to a few tooltip fields if present
+all_keys = list(next(iter(roofs_gj["features"]))["properties"].keys())
+tooltip_fields = [k for k in all_keys if k.lower() not in {"geometry"}][:4] or []
+
+# --- add the overlay ---
+folium.GeoJson(
+    data=roofs_gj,
+    name="Rooftops",
+    pane="rooftops",
+    style_function=lambda feat: {
+        "fillColor": "#2ca25f",  # soft green fill
+        "color": "#1b7837",  # outline
+        "weight": 0.6,
+        "fillOpacity": 0.25,  # see-through over your choropleth
+    },
+    highlight_function=lambda feat: {
+        "weight": 1.5,
+        "color": "#08519c",
+        "fillOpacity": 0.4,
+    },
+    tooltip=folium.features.GeoJsonTooltip(
+        fields=tooltip_fields,
+        aliases=[f"{k}:" for k in tooltip_fields],
+        sticky=True,
+        localize=True,
+    ),
+).add_to(m)
+
+# keep layer control updated
+folium.LayerControl(collapsed=False).add_to(m)
