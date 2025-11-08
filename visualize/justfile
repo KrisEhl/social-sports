@@ -1,5 +1,5 @@
 run:
-    uv run python main.py
+    OGR_GEOJSON_MAX_OBJ_SIZE=100000000 uv run python app.py
     open index.html
 
 convert-tif-to-geojson:

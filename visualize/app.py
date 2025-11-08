@@ -10,26 +10,45 @@ import branca.colormap as cm
 
 from utils_regrid import regrid_sum_2km, add_soccer_counts_to_grid
 
+LEISURE_TO_COLOR = {
+    "pitch": "green",
+    "sports_centre": "blue",
+    "stadium": "orange",
+}
+
 
 def add_soccer_fields_to_map(m):
     soccer_fields = pd.read_csv("berlin_soccer_fields.csv")
     # m = folium.Map(location=(52.4813076, 13.4381063), zoom_start=12)
+    # breakpoint()
     for _, row in soccer_fields.iterrows():
         name = row.get("name") or "Unnamed field"
         leisure = row.get("leisure") or "unknown type"
-        popup_html = f"<b>{leisure}</b><br>{name}"
-        marker = folium.Marker(
-            location=[row["lat"], row["lon"]],
-            popup=folium.Popup(popup_html, max_width=250),
-            tooltip=leisure,
-        )
-        marker.add_to(m)
+        color = LEISURE_TO_COLOR.get(leisure, "grey")
+        # popup_html = f"<b>{leisure}</b><br>{name}"
+        # marker = folium.Marker(
+        #     location=[row["lat"], row["lon"]],
+        #     popup=folium.Popup(popup_html, max_width=250),
+        #     tooltip=leisure,
+        # )
+        # marker.add_to(m)
+
+        folium.CircleMarker(
+            location=[row.lat, row.lon],
+            radius=4,  # ← smaller size (default is ~10)
+            color="black",
+            weight=0.5,
+            fill=True,
+            fill_color=color,
+            fill_opacity=0.8,
+            popup=f"{name} ({leisure})",
+        ).add_to(m)
 
 
 # ---------- CONFIG ----------
 GEOJSON_IN = "GHS_POP_E2030_GLOBE_R2023A_54009_100_V1_0_R3_C20.geojson"  # input GeoJSON from your polygonize step
 GEOJSON_OUT = "filtered.geojson"  # optional filtered output (for inspection)
-HTML_OUT = "choropleth.html"
+HTML_OUT = "index.html"
 VALUE_FIELD = "value"  # attribute holding your metric
 BBOX = (12.9, 52.2, 13.9, 52.7)  # (min_lon, min_lat, max_lon, max_lat)
 
@@ -94,48 +113,7 @@ if gdf.empty:
 minx, miny, maxx, maxy = gdf.total_bounds
 center = [(miny + maxy) / 2.0, (minx + maxx) / 2.0]
 
-# # Prepare a GeoJSON dictionary (so Folium sees the properties incl. fid/value)
-# gj = json.loads(gdf.to_json())
-
-# # ---------- BUILD FOLIUM MAP ----------
-# # Compute color scale
-# vmin, vmax = float(df_vals[VALUE_FIELD].min()), float(df_vals[VALUE_FIELD].max())
-
-# # Create your own Viridis colormap with branca
-
-# cmap = cm.linear.viridis.scale(vmin, vmax)
-# cmap.caption = VALUE_FIELD
-
-# Create the base map
 m = folium.Map(location=center, zoom_start=18, tiles="cartodbpositron")
-
-# # Use Choropleth WITHOUT the `fill_color` arg (or use a ColorBrewer palette instead)
-# folium.Choropleth(
-#     geo_data=gj,
-#     name="Choropleth",
-#     data=df_vals,
-#     columns=["fid", VALUE_FIELD],
-#     key_on="feature.properties.fid",
-#     fill_color="YlGnBu",  # ✅ valid ColorBrewer palette, OR remove this and style manually
-#     fill_opacity=0.7,
-#     line_opacity=0.1,
-#     nan_fill_opacity=0.0,
-#     legend_name=VALUE_FIELD,
-# ).add_to(m)
-
-# # Add colorbar manually
-# cmap.add_to(m)
-# Tooltip layer
-# folium.GeoJson(
-#     gj,
-#     name="ratio",
-#     tooltip=folium.features.GeoJsonTooltip(
-#         fields=["ratio"],
-#         aliases=[f"{'ratio'}: "],
-#         sticky=True,
-#     ),
-#     style_function=lambda _: {"weight": 0},
-# ).add_to(m)
 
 
 def add_ratio_fields_to_map(m, gdf):
@@ -229,7 +207,7 @@ def style_fn(feature):
         "fillColor": cmap(r),
         "color": "black",
         "weight": 0.1,
-        "fillOpacity": 0.7,
+        "fillOpacity": 0.3,
     }
 
 
@@ -249,11 +227,7 @@ folium.GeoJson(
 # Add legend
 cmap.add_to(m)
 folium.LayerControl(collapsed=False).add_to(m)
-m.save("choropleth_ratio.html")
-
-print(f"[DONE] Saved choropleth_ratio.html with vmin={vmin:.2f}, vmax={vmax:.2f}")
-
 
 add_soccer_fields_to_map(m)
 m.save(HTML_OUT)
-print(f"[DONE] Saved {HTML_OUT}")
+print(f"[DONE] Saved {HTML_OUT} with vmin={vmin:.2f}, vmax={vmax:.2f}")
