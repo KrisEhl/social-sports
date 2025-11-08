@@ -2,6 +2,7 @@
 import json
 import pandas as pd
 import geopandas as gpd
+from pathlib import Path
 import folium
 import os
 from shapely.geometry import box
@@ -15,6 +16,63 @@ LEISURE_TO_COLOR = {
     "sports_centre": "blue",
     "stadium": "orange",
 }
+
+
+def add_rooftops_to_map(m, filename="berlin_rooftops.geojson", assume_epsg=None):
+    """
+    Overlay polygon GeoJSON in orange, reproject to WGS84, and fit the map.
+    - filename: path relative to this script (same folder by default)
+    - assume_epsg: if your file has no CRS, set e.g. 25833 (Berlin UTM) or 4326
+    """
+    path = Path(__file__).parent / filename
+    gdf = gpd.read_file(path)
+
+    # If file has no CRS, optionally assume one (Berlin datasets often use EPSG:25833)
+    if gdf.crs is None and assume_epsg:
+        gdf = gdf.set_crs(assume_epsg, allow_override=True)
+
+    # Reproject to WGS84 for Folium
+    if gdf.crs is not None and gdf.crs.to_epsg() != 4326:
+        gdf = gdf.to_crs(4326)
+
+    # Fix invalid geometries (common with complex footprints)
+    if not gdf.geometry.is_valid.all():
+        gdf = gdf.set_geometry(gdf.buffer(0))
+
+    # Build GeoJSON for Folium
+    gj = json.loads(gdf.to_json())
+
+    # Choose a few tooltip fields if present
+    tooltip_fields = [c for c in gdf.columns if c != "geometry"][:4]
+
+    layer = folium.GeoJson(
+        data=gj,
+        name="Rooftops",
+        style_function=lambda f: {
+            "fillColor": "#ff7f00",  # bright orange
+            "color": "#b35806",  # darker outline
+            "weight": 1.0,
+            "fillOpacity": 0.6,  # more visible
+        },
+        highlight_function=lambda f: {
+            "weight": 2.0,
+            "color": "#000000",
+            "fillOpacity": 0.75,
+        },
+        tooltip=folium.features.GeoJsonTooltip(
+            fields=tooltip_fields,
+            aliases=[f"{k}:" for k in tooltip_fields],
+            sticky=True,
+            localize=True,
+        ),
+        overlay=True,
+        control=True,
+    ).add_to(m)
+
+    # 🔎 Ensure the map view moves to the polygons
+    # m.fit_bounds(layer.get_bounds())
+
+    return m
 
 
 def add_soccer_fields_to_map(m):
@@ -41,6 +99,7 @@ def add_soccer_fields_to_map(m):
             fill_opacity=0.8,
             popup=f"{name} ({leisure})",
         ).add_to(m)
+    return m
 
 
 # ---------- CONFIG ----------
@@ -209,61 +268,29 @@ def style_fn(feature):
     }
 
 
-# Add layer
-folium.GeoJson(
-    gj,
-    name="Soccer-to-Population Ratio (normalized)",
-    style_function=style_fn,
-    tooltip=folium.features.GeoJsonTooltip(
-        fields=["ratio", "value", "soccer_count"],
-        aliases=["ratio:", "population:", "soccer fields:"],
-        sticky=True,
-        localize=True,
-    ),
-).add_to(m)
+def add_soccer_ratio_to_map(m):
+    folium.GeoJson(
+        gj,
+        name="Soccer-to-Population Ratio (normalized)",
+        style_function=style_fn,
+        tooltip=folium.features.GeoJsonTooltip(
+            fields=["ratio", "value", "soccer_count"],
+            aliases=["ratio:", "population:", "soccer fields:"],
+            sticky=True,
+            localize=True,
+        ),
+    ).add_to(m)
 
-# Add legend
-cmap.add_to(m)
-folium.LayerControl(collapsed=False).add_to(m)
+    # Add legend
+    cmap.add_to(m)
+    folium.LayerControl(collapsed=False).add_to(m)
+    return m
 
-add_soccer_fields_to_map(m)
+
+m = add_soccer_ratio_to_map(m)
+m = add_soccer_fields_to_map(m)
+# not really working yet
+# m = add_rooftops_to_map(m)
+
 m.save(HTML_OUT)
 print(f"[DONE] Saved {HTML_OUT} with vmin={vmin:.2f}, vmax={vmax:.2f}")
-
-ROOFS_PATH = "/mnt/data/berlin_rooftops.geojson"  # or your local path
-with open(ROOFS_PATH, "r", encoding="utf-8") as f:
-    roofs_gj = json.load(f)
-
-# --- create a pane so polygons render above tiles, below markers ---
-folium.map.Pane("rooftops", z_index=420).add_to(m)  # m = your existing Folium map
-
-# Pick up to a few tooltip fields if present
-all_keys = list(next(iter(roofs_gj["features"]))["properties"].keys())
-tooltip_fields = [k for k in all_keys if k.lower() not in {"geometry"}][:4] or []
-
-# --- add the overlay ---
-folium.GeoJson(
-    data=roofs_gj,
-    name="Rooftops",
-    pane="rooftops",
-    style_function=lambda feat: {
-        "fillColor": "#2ca25f",  # soft green fill
-        "color": "#1b7837",  # outline
-        "weight": 0.6,
-        "fillOpacity": 0.25,  # see-through over your choropleth
-    },
-    highlight_function=lambda feat: {
-        "weight": 1.5,
-        "color": "#08519c",
-        "fillOpacity": 0.4,
-    },
-    tooltip=folium.features.GeoJsonTooltip(
-        fields=tooltip_fields,
-        aliases=[f"{k}:" for k in tooltip_fields],
-        sticky=True,
-        localize=True,
-    ),
-).add_to(m)
-
-# keep layer control updated
-folium.LayerControl(collapsed=False).add_to(m)
