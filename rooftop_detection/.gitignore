@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+dist/
+build/
+
+# Credentials (keep template only)
+copernicus_credentials.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+temp_*.tif
+temp_*.*
+
+# Large data files (optional - uncomment if you don't want to commit results)
+# results/*.geojson
+# results/*.html

@@ -1,0 +1,9 @@
+- rooftops mit fußballfeldgröße identifizieren
+visual und elevation
+sentinel 2 mosaik 
+
+
+- social relevance
+landkreise nach Demographie analysieren (Kinder, junge Menschen -> sportaffin)
+Anzahl Schulen
+etc.
