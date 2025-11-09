@@ -1,6 +1,7 @@
-## Installation
+## Setup
 - Install gdal on your system
 - Install python dependencies with [`uv`](https://docs.astral.sh/uv/getting-started/installation/)
+- We just [`just`](https://github.com/casey/just) as an alternative to make
 
 
 ## Data
