@@ -26,6 +26,6 @@ if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('geojson')
-    parser.add_argument('--out', default='challenge-02-sports-mapping/results/rooftops_map.html')
+    parser.add_argument('--out', default='results/rooftops_map.html')
     args = parser.parse_args()
     visualize(Path(args.geojson), Path(args.out))

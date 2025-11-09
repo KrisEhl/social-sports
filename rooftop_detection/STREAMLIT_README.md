@@ -68,7 +68,7 @@ The app requires Copernicus Data Space Ecosystem credentials. You can provide th
 
 ### Option 1: Credentials file (Recommended)
 Create a `copernicus_credentials.json` file in one of these locations:
-- Repository root: `challenge-02-sports-mapping/copernicus_credentials.json`
+- Repository root: `social-sports/rooftop_detection/copernicus_credentials.json`
 - User home: `~/.copernicus_credentials.json`
 - Absolute path: `C:/Repos/copernicus_credentials.json`
 
