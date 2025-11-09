@@ -1,0 +1,30 @@
+[project]
+name = "cassini"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Lennart Salabarria",email = "lennart.salabarria@gmx.net"}
+]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "sentinelsat (>=1.2.1,<2.0.0)",
+    "pandas (>=2.3.3,<3.0.0)",
+    "geopandas (>=1.1.1,<2.0.0)",
+    "matplotlib (>=3.10.7,<4.0.0)",
+    "folium (>=0.20.0,<0.21.0)",
+    "sentinelhub (>=3.11.3,<4.0.0)",
+    "rasterio (>=1.4.3,<2.0.0)",
+    "opencv-python (>=4.12.0.88,<5.0.0.0)",
+    "joblib (>=1.5.2,<2.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[dependency-groups]
+dev = [
+    "ipykernel (>=7.1.0,<8.0.0)"
+]
