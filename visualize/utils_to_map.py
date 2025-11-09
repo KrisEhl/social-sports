@@ -1,12 +1,18 @@
-import json
 import folium
-import geopandas as gpd
 from pathlib import Path
+import geopandas as gpd
+import pandas as pd
+import json
 
 
-def add_rooftops_overlay(
-    m, filename="../berlin_rooftops_compressed.geojson", assume_epsg=False
-):
+LEISURE_TO_COLOR = {
+    "pitch": "green",
+    "sports_centre": "blue",
+    "stadium": "orange",
+}
+
+
+def add_rooftops_to_map(m, filename="berlin_rooftops.geojson", assume_epsg=None):
     """
     Overlay polygon GeoJSON in orange, reproject to WGS84, and fit the map.
     - filename: path relative to this script (same folder by default)
@@ -56,15 +62,46 @@ def add_rooftops_overlay(
         overlay=True,
         control=True,
     ).add_to(m)
+
     # 🔎 Ensure the map view moves to the polygons
-    m.fit_bounds(layer.get_bounds())
+    # m.fit_bounds(layer.get_bounds())
 
     return m
 
 
-m = folium.Map(location=[52.5, 13.4], zoom_start=12, tiles="cartodbpositron")
+def add_soccer_fields_to_map(m):
+    soccer_fields = pd.read_csv("berlin_soccer_fields.csv")
+    for _, row in soccer_fields.iterrows():
+        # name = row.get("name")
+        # if pd.isna(name) or name == "nan":
+        #     name = "Unnamed field"
+        leisure = row.get("leisure")
+        if pd.isna(leisure) or leisure == "nan":
+            leisure = "unknown type"
+        color = LEISURE_TO_COLOR.get(leisure, "grey")
+        image_path = f"facility_images_brighter/{row['osm_id']}.png"
+        #     {name}<br><br>
+        html = f"""
+            <div style="width:125px; font-size:14px; line-height:1.3">
+            <b>{leisure}</b><br>
+            <img src="{image_path}" alt="image" style="width:100%; height:auto; border-radius:4px;">
+            </div>
+        """
+        # marker = folium.Marker(
+        #     location=[row["lat"], row["lon"]],
+        #     popup=folium.Popup(popup_html, max_width=250),
+        #     tooltip=leisure,
+        # )
+        # marker.add_to(m)
 
-add_rooftops_overlay(m)
-
-m.save("map_with_rooftops.html")
-print("[DONE] Map saved as map_with_rooftops.html")
+        folium.CircleMarker(
+            location=[row.lat, row.lon],
+            radius=4,  # ← smaller size (default is ~10)
+            color="black",
+            weight=0.5,
+            fill=True,
+            fill_color=color,
+            fill_opacity=0.8,
+            popup=folium.Popup(html, max_width=125),
+        ).add_to(m)
+    return m
