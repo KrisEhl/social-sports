@@ -2,8 +2,8 @@
 
 ## 1. Clone the Repository
 ```bash
-git clone <repository-url>
-cd challenge-02-sports-mapping
+git clone https://github.com/KrisEhl/social-sports.git
+cd social-sports/rooftop_detection
 ```
 
 ## 2. Install Dependencies

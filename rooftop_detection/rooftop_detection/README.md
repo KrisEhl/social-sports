@@ -270,11 +270,11 @@ Each detected rooftop is a GeoJSON Feature with:
 
 ### Install dependencies:
 ```powershell
-pip install -r challenge-02-sports-mapping\rooftop_detection\requirements.txt
+pip install -r requirements.txt
 ```
 
 ### Configure credentials:
-Create `C:\Repos\copernicus_credentials.json`:
+Create `copernicus_credentials.json` in the rooftop_detection folder:
 ```json
 {
   "username": "your_copernicus_username",
@@ -285,7 +285,7 @@ Create `C:\Repos\copernicus_credentials.json`:
 
 ### Run detection for Berlin:
 ```powershell
-python challenge-02-sports-mapping\rooftop_detection\rooftop_detector.py --city berlin
+python rooftop_detection\rooftop_detector.py --city berlin
 ```
 
 ### Output files:
@@ -295,7 +295,7 @@ python challenge-02-sports-mapping\rooftop_detection\rooftop_detector.py --city 
 
 ### View results:
 ```powershell
-cd challenge-02-sports-mapping\results
+cd results
 python -m http.server 8000
 # Open http://localhost:8000/berlin_rooftops_map_TIMESTAMP.html
 ```

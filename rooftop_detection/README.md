@@ -33,8 +33,8 @@ This project uses **Copernicus Sentinel-2 satellite data** and **computer vision
 
 ```powershell
 # Clone the repository
-git clone https://github.com/Chrisay-22/hackathon_nextcoder.git
-cd hackathon_nextcoder/challenge-02-sports-mapping
+git clone https://github.com/KrisEhl/social-sports.git
+cd social-sports/rooftop_detection
 
 # Install dependencies
 pip install -r requirements.txt
@@ -108,7 +108,7 @@ Rooftops are color-coded by suitability score:
 ## 📁 Project Structure
 
 ```
-challenge-02-sports-mapping/
+rooftop_detection/
 ├── app.py                          # Streamlit web application
 ├── requirements.txt                # Python dependencies
 ├── copernicus_credentials.json     # Your credentials (gitignored)

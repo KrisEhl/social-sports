@@ -3,8 +3,10 @@ import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-DETECTOR = ROOT / 'challenge-02-sports-mapping' / 'rooftop_detection' / 'rooftop_detector.py'
-RESULTS_DIR = ROOT / 'challenge-02-sports-mapping' / 'results'
+DETECTOR = (
+    ROOT / 'rooftop_detection' / 'rooftop_detection' / 'rooftop_detector.py'
+)
+RESULTS_DIR = ROOT / 'rooftop_detection' / 'results'
 RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
 
